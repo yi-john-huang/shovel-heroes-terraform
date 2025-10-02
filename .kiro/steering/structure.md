@@ -132,7 +132,7 @@ Provider aliases enable multi-region deployments:
 ```hcl
 provider "aws" {
   alias  = "taipei"
-  region = "ap-northeast-2"
+  region = "ap-east-2"
 }
 
 resource "aws_resource" "taipei_resource" {

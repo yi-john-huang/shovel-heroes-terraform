@@ -1,7 +1,7 @@
 # Product Overview
 
 ## Product Description
-Comprehensive AWS infrastructure for deploying cloud-native applications with enterprise-grade features, focusing on multi-region support with primary deployment in Taiwan (ap-northeast-2).
+Comprehensive AWS infrastructure for deploying cloud-native applications with enterprise-grade features, focusing on multi-region support with primary deployment in Taiwan (ap-east-2).
 
 **Project**: Shovel Heroes Terraform Infrastructure
 **Version**: 1.0.0
@@ -16,7 +16,7 @@ Comprehensive AWS infrastructure for deploying cloud-native applications with en
   - Scalable compute-intensive node groups
 
 ### Multi-Region Support
-- Primary region: Taiwan (ap-northeast-2)
+- Primary region: Taiwan (ap-east-2)
 - Configurable regional deployments via feature flags
 - Multi-AZ deployment for high availability
 

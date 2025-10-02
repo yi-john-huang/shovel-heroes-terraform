@@ -52,7 +52,7 @@ This infrastructure supports scalable applications with enterprise-grade feature
 
 - Terraform >= 1.9.8
 - AWS CLI configured with appropriate credentials
-- Access to Taiwan region (ap-northeast-2)
+- Access to Taiwan region (ap-east-2)
 
 ### Deployment
 
@@ -142,7 +142,7 @@ Create a `terraform.tfvars` file with your specific values:
 
 ```hcl
 project_name = "my-app"
-primary_region = "ap-northeast-2"
+primary_region = "ap-east-2"
 
 env_vars = {
   env_name = "production"
@@ -153,8 +153,6 @@ secrets = {
   database_password = "your-secure-password"
 }
 
-github_org = "your-github-org"
-github_token = "your-github-token"
 cloudflare_api_token = "your-cloudflare-token"
 ```
 
@@ -295,4 +293,4 @@ For issues or questions:
 - Check steering documentation first
 - Review Terraform plan output
 - Validate AWS permissions and quotas
-- Ensure region availability (ap-northeast-2)
+- Ensure region availability (ap-east-2)

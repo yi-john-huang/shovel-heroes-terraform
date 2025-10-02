@@ -3,7 +3,7 @@
 ## Architecture
 **Type**: Infrastructure as Code (Terraform)
 **Cloud Provider**: Amazon Web Services (AWS)
-**Primary Region**: Taiwan (ap-northeast-2)
+**Primary Region**: Taiwan (ap-east-2)
 **Multi-Region Support**: Yes
 
 ## Terraform Configuration
@@ -77,7 +77,7 @@
 
 ### AWS Access Requirements
 - Valid AWS credentials configured
-- Access to Taiwan region (ap-northeast-2)
+- Access to Taiwan region (ap-east-2)
 - Appropriate IAM permissions for resource creation
 - S3 bucket for Terraform state backend
 

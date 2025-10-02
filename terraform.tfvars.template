@@ -3,32 +3,17 @@
 # Never commit terraform.tfvars files to version control
 
 # Basic Configuration
-environment    = "dev"
-project_name   = "my-terraform-project"
-aws_region     = "us-west-2"
+environment  = "production"
+project_name = "shovel-heros"
+aws_region   = "ap-east-2"
 
-# Network Configuration
-vpc_cidr             = "10.0.0.0/16"
-availability_zones   = ["us-west-2a", "us-west-2b", "us-west-2c"]
-public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-private_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-
-# Feature Flags
-rds_enabled = true
-s3_enabled  = true
+# Environment Configuration
+env_vars = {
+  env_name = "production"
+  env_type = "prod"
+}
 
 # Secrets (use actual values - these will be excluded from version control)
 secrets = {
   database_password = "CHANGE_THIS_SECURE_PASSWORD"
-}
-
-# API Tokens (load from environment or secrets/ directory)
-github_token           = "PLACEHOLDER_GITHUB_TOKEN"
-cloudflare_api_token   = "PLACEHOLDER_CLOUDFLARE_TOKEN"
-
-# Tags
-tags = {
-  Environment = "dev"
-  Project     = "my-terraform-project"
-  ManagedBy   = "terraform"
 }

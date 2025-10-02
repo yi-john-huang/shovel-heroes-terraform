@@ -45,7 +45,7 @@ Create a `terraform.tfvars` file:
 
 ```hcl
 project_name = "shovel-heroes"
-primary_region = "ap-northeast-2"
+primary_region = "ap-east-2"
 
 env_vars = {
   env_name = "production"
@@ -129,7 +129,7 @@ cd /path/to/shovel-heroes/packages/backend
 docker build -t shovel-heroes-backend:latest .
 
 # Get ECR login
-aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin <ECR_URL>
+aws ecr get-login-password --region ap-east-2 | docker login --username AWS --password-stdin <ECR_URL>
 
 # Tag and push
 ECR_BACKEND=$(terraform output -json ecr_repository_urls | jq -r '.["shovel-heroes-backend"]')
@@ -528,8 +528,8 @@ aws elbv2 describe-target-health \
 
 ```bash
 # Re-authenticate to ECR
-aws ecr get-login-password --region ap-northeast-2 | \
-  docker login --username AWS --password-stdin <account-id>.dkr.ecr.ap-northeast-2.amazonaws.com
+aws ecr get-login-password --region ap-east-2 | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.ap-east-2.amazonaws.com
 ```
 
 ---
@@ -568,7 +568,7 @@ terraform output -raw github_actions_role_arn
 ```
 
 2. **Configure GitHub Secrets**:
-   - `AWS_REGION`: Your deployment region (e.g., `ap-northeast-2`)
+   - `AWS_REGION`: Your deployment region (e.g., `ap-east-2`)
    - `AWS_ROLE_ARN`: The role ARN from step 1
 
 3. **Sample GitHub Actions Workflow** (`.github/workflows/deploy.yml`):
