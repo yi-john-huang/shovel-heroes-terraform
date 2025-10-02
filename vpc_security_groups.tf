@@ -34,11 +34,30 @@ resource "aws_security_group" "internal_sg" {
   name_prefix = "${var.project_name}-${local.env_type}-internal-"
   vpc_id      = aws_vpc.vpc.id
 
+  # Backend API traffic
   ingress {
-    description = "All traffic from VPC"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "Backend API from VPC"
+    from_port   = local.backend_port
+    to_port     = local.backend_port
+    protocol    = "tcp"
+    cidr_blocks = [local.vpc_cidr]
+  }
+
+  # PostgreSQL database traffic
+  ingress {
+    description = "PostgreSQL from VPC"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [local.vpc_cidr]
+  }
+
+  # HTTPS for outbound API calls
+  ingress {
+    description = "HTTPS from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = [local.vpc_cidr]
   }
 
@@ -143,30 +162,6 @@ resource "aws_security_group" "backend_pods" {
   name_prefix = "${var.project_name}-${local.env_type}-backend-pods-"
   vpc_id      = aws_vpc.vpc.id
 
-  ingress {
-    description     = "Backend API port from ALB"
-    from_port       = local.backend_port
-    to_port         = local.backend_port
-    protocol        = "tcp"
-    security_groups = local.alb_enabled ? [aws_security_group.alb[0].id] : []
-  }
-
-  ingress {
-    description = "Backend API port from VPC"
-    from_port   = local.backend_port
-    to_port     = local.backend_port
-    protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
-  }
-
-  ingress {
-    description = "Health check from ALB"
-    from_port   = local.backend_port
-    to_port     = local.backend_port
-    protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
-  }
-
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -182,4 +177,29 @@ resource "aws_security_group" "backend_pods" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# Security group rules for backend pods (separate to avoid duplicates)
+resource "aws_security_group_rule" "backend_pods_from_alb" {
+  count = local.eks_enabled && local.alb_enabled ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = local.backend_port
+  to_port                  = local.backend_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb[0].id
+  security_group_id        = aws_security_group.backend_pods[0].id
+  description              = "Backend API port from ALB"
+}
+
+resource "aws_security_group_rule" "backend_pods_from_vpc" {
+  count = local.eks_enabled ? 1 : 0
+
+  type              = "ingress"
+  from_port         = local.backend_port
+  to_port           = local.backend_port
+  protocol          = "tcp"
+  cidr_blocks       = [local.vpc_cidr]
+  security_group_id = aws_security_group.backend_pods[0].id
+  description       = "Backend API port and health checks from VPC"
 }

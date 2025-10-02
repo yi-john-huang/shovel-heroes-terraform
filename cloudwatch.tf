@@ -1,23 +1,3 @@
-resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/application/${var.project_name}-${local.env_type}"
-  retention_in_days = local.is_production ? 30 : 7
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${local.env_type}-application-logs"
-  })
-}
-
-resource "aws_cloudwatch_log_group" "eks_cluster" {
-  count = local.eks_enabled ? 1 : 0
-
-  name              = "/aws/eks/${local.eks_cluster_name}/cluster"
-  retention_in_days = local.is_production ? 30 : 7
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${local.env_type}-eks-cluster-logs"
-  })
-}
-
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   count = local.eks_enabled ? 1 : 0
 
@@ -77,7 +57,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ] : []
           view    = "timeSeries"
           stacked = false
-          region  = data.aws_region.current.name
+          region  = data.aws_region.current.id
           title   = "EKS Cluster Metrics"
           period  = 300
         }
