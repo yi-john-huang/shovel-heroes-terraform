@@ -10,19 +10,18 @@ locals {
   frontend_port = 3000
 
   # Feature flags - Control which components to deploy
-  eks_enabled        = true
-  rds_enabled        = true
-  s3_enabled         = true
-  alb_enabled        = true
-  cloudfront_enabled = true
-  taipei_enabled     = false # Multi-region deployment to Taipei
+  eks_enabled    = true
+  rds_enabled    = true
+  s3_enabled     = true
+  alb_enabled    = true
+  taipei_enabled = false # Multi-region deployment to Taipei
 
   # Networking
   vpc_cidr = "10.0.0.0/16"
   availability_zones = slice(
     data.aws_availability_zones.available.names,
     0,
-    3 # Use 3 AZs for high availability
+    local.is_production ? 3 : 2 # 2 AZs for cost savings in non-prod
   )
 
   # EKS Configuration
@@ -36,7 +35,7 @@ locals {
   db_name           = "shovelheroes"
   db_port           = 5432
   db_engine         = "postgres"
-  db_engine_version = "16.8"
+  db_engine_version = "16.9" # Latest available in ap-east-2 region
 
   # ECR Configuration
   ecr_repositories = [
@@ -49,17 +48,13 @@ locals {
   logs_bucket_name     = "${var.project_name}-${local.env_type}-logs"
   backup_bucket_name   = "${var.project_name}-${local.env_type}-backups"
 
-  # CloudFront
-  cloudfront_price_class = local.is_production ? "PriceClass_200" : "PriceClass_100"
-
   # Common tags applied to all resources
   common_tags = {
     Project     = var.project_name
     Application = local.app_name
     Environment = local.env_type
     ManagedBy   = "terraform"
-    CreatedBy   = data.aws_caller_identity.current.arn
-    Region      = data.aws_region.current.name
+    Region      = data.aws_region.current.id
   }
 
   # ALB Configuration
@@ -77,10 +72,10 @@ locals {
   backend_max_replicas     = local.is_production ? 10 : 3
   backend_desired_replicas = local.is_production ? 3 : 1
 
-  # Log retention
-  log_retention_days = local.is_production ? 30 : 7
+  # Log retention (minimize for cost)
+  log_retention_days = local.is_production ? 30 : 3
 
-  # Backup retention
+  # Backup retention (minimize for cost)
   backup_retention_days = local.is_production ? 7 : 1
 
   # Resource sizing based on environment

@@ -7,7 +7,19 @@ variable "project_name" {
 variable "primary_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "ap-northeast-2" # Seoul, South Korea
+  default     = "ap-east-2" # Taipei, Taiwan
+}
+
+variable "aws_region" {
+  description = "AWS region for resource deployment (alias for primary_region)"
+  type        = string
+  default     = "ap-east-2"
+}
+
+variable "environment" {
+  description = "Environment name (e.g., development, staging, production)"
+  type        = string
+  default     = "production"
 }
 
 variable "env_vars" {
@@ -33,22 +45,14 @@ variable "secrets" {
   }
 }
 
-variable "github_org" {
-  description = "GitHub organization name"
+variable "domain_name" {
+  description = "Domain name for the application (required for HTTPS/ACM certificate)"
   type        = string
-  default     = "your-org"
+  default     = ""
+
+  validation {
+    condition     = var.domain_name == "" || can(regex("^[a-z0-9-]+(\\.[a-z0-9-]+)+$", var.domain_name))
+    error_message = "Domain name must be a valid DNS name (e.g., example.com)"
+  }
 }
 
-variable "github_token" {
-  description = "GitHub token"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "cloudflare_api_token" {
-  description = "Cloudflare API token"
-  type        = string
-  sensitive   = true
-  default     = ""
-}

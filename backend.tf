@@ -1,10 +1,12 @@
 terraform {
   backend "s3" {
-    bucket         = "terraform-state-bucket-example"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "ap-northeast-2" # Seoul, South Korea
-    encrypt        = true
-    use_lockfile   = true
-    dynamodb_table = "terraform-state-lock"
+    bucket                     = "shovel-heros-terraform-state-bucket"
+    key                        = "infrastructure/terraform.tfstate"
+    region                     = "ap-east-2" # Taipei, Taiwan
+    skip_region_validation     = true
+    skip_requesting_account_id = true
+    skip_s3_checksum           = true
+    encrypt                    = true
+    use_lockfile               = true
   }
 }

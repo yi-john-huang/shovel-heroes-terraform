@@ -39,13 +39,6 @@ output "rds_endpoint" {
   sensitive   = true
 }
 
-output "cloudwatch_log_group_name" {
-  description = "CloudWatch log group name"
-  value       = aws_cloudwatch_log_group.application.name
-}
-
-# Shovel Heroes Application Outputs
-
 ## ECR Repositories
 output "ecr_repository_urls" {
   description = "ECR repository URLs for container images"
@@ -124,11 +117,6 @@ output "backend_pod_role_arn" {
   value       = local.eks_enabled ? aws_iam_role.backend_pods[0].arn : null
 }
 
-output "github_actions_role_arn" {
-  description = "IAM role ARN for GitHub Actions deployments"
-  value       = aws_iam_role.github_actions.arn
-}
-
 ## S3 Buckets
 output "frontend_bucket_name" {
   description = "S3 bucket name for frontend static assets"
@@ -140,31 +128,15 @@ output "frontend_bucket_regional_domain" {
   value       = local.s3_enabled ? aws_s3_bucket.frontend[0].bucket_regional_domain_name : null
 }
 
-output "logs_bucket_name" {
-  description = "S3 bucket name for logs"
-  value       = local.s3_enabled ? aws_s3_bucket.logs[0].bucket : null
-}
-
 output "backups_bucket_name" {
   description = "S3 bucket name for backups"
   value       = local.s3_enabled ? aws_s3_bucket.backups[0].bucket : null
 }
 
-## CloudFront
-output "cloudfront_distribution_id" {
-  description = "CloudFront distribution ID"
-  value       = local.cloudfront_enabled ? aws_cloudfront_distribution.frontend[0].id : null
-}
-
-output "cloudfront_domain_name" {
-  description = "CloudFront distribution domain name"
-  value       = local.cloudfront_enabled ? aws_cloudfront_distribution.frontend[0].domain_name : null
-}
-
 ## Kubernetes Configuration
 output "kubectl_config_command" {
   description = "Command to configure kubectl"
-  value       = local.eks_enabled ? "aws eks update-kubeconfig --region ${data.aws_region.current.name} --name ${module.eks[0].cluster_name}" : null
+  value       = local.eks_enabled ? "aws eks update-kubeconfig --region ${data.aws_region.current.id} --name ${module.eks[0].cluster_name}" : null
 }
 
 ## Application URLs
@@ -173,9 +145,19 @@ output "api_base_url" {
   value       = local.alb_enabled ? "http://${aws_lb.api[0].dns_name}" : null
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID"
+  value       = local.s3_enabled && local.is_production ? aws_cloudfront_distribution.frontend[0].id : null
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name"
+  value       = local.s3_enabled && local.is_production ? aws_cloudfront_distribution.frontend[0].domain_name : null
+}
+
 output "frontend_url" {
-  description = "Frontend URL (CloudFront or S3)"
-  value       = local.cloudfront_enabled ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : (local.s3_enabled ? "http://${aws_s3_bucket_website_configuration.frontend[0].website_endpoint}" : null)
+  description = "Frontend URL (via CloudFront in prod, S3 website in non-prod)"
+  value       = local.s3_enabled ? (local.is_production ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : "http://${aws_s3_bucket.frontend[0].bucket}.s3-website.${data.aws_region.current.id}.amazonaws.com") : null
 }
 
 ## Security Groups
@@ -193,15 +175,14 @@ output "alb_security_group_id" {
 output "deployment_summary" {
   description = "Summary of deployed resources for Shovel Heroes"
   value = {
-    project_name       = var.project_name
-    environment        = local.env_type
-    region             = data.aws_region.current.name
-    eks_enabled        = local.eks_enabled
-    rds_enabled        = local.rds_enabled
-    alb_enabled        = local.alb_enabled
-    s3_enabled         = local.s3_enabled
-    cloudfront_enabled = local.cloudfront_enabled
-    application        = local.app_name
-    backend_port       = local.backend_port
+    project_name = var.project_name
+    environment  = local.env_type
+    region       = data.aws_region.current.id
+    eks_enabled  = local.eks_enabled
+    rds_enabled  = local.rds_enabled
+    alb_enabled  = local.alb_enabled
+    s3_enabled   = local.s3_enabled
+    application  = local.app_name
+    backend_port = local.backend_port
   }
 }
