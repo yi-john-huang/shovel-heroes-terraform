@@ -14,12 +14,6 @@ resource "aws_lb" "api" {
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
-  access_logs {
-    bucket  = aws_s3_bucket.logs[0].id
-    prefix  = "alb"
-    enabled = true
-  }
-
   tags = merge(local.common_tags, {
     Name = local.alb_name
   })
@@ -73,10 +67,10 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = local.is_production ? "redirect" : "forward"
+    type = var.domain_name != "" ? "redirect" : "forward"
 
     dynamic "redirect" {
-      for_each = local.is_production ? [1] : []
+      for_each = var.domain_name != "" ? [1] : []
       content {
         port        = "443"
         protocol    = "HTTPS"
@@ -84,30 +78,55 @@ resource "aws_lb_listener" "http" {
       }
     }
 
-    target_group_arn = local.is_production ? null : aws_lb_target_group.backend[0].arn
+    target_group_arn = var.domain_name != "" ? null : aws_lb_target_group.backend[0].arn
   }
 
   tags = local.common_tags
 }
 
 # HTTPS listener (requires ACM certificate)
-# Uncomment when ACM certificate is available
-# resource "aws_lb_listener" "https" {
-#   count = local.alb_enabled && local.is_production ? 1 : 0
-#
-#   load_balancer_arn = aws_lb.api[0].arn
-#   port              = "443"
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-#   certificate_arn   = aws_acm_certificate.api[0].arn
-#
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.backend[0].arn
-#   }
-#
-#   tags = local.common_tags
-# }
+resource "aws_lb_listener" "https" {
+  count = local.alb_enabled && var.domain_name != "" ? 1 : 0
+
+  load_balancer_arn = aws_lb.api[0].arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.api[0].arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  tags = local.common_tags
+}
+
+# Listener rule for API paths on HTTPS
+resource "aws_lb_listener_rule" "api_https" {
+  count = local.alb_enabled && var.domain_name != "" ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        "/api/*",
+        "/healthz",
+        "/docs",
+        "/docs/*"
+      ]
+    }
+  }
+
+  tags = local.common_tags
+}
 
 # Listener rule for API paths
 resource "aws_lb_listener_rule" "api" {
