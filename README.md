@@ -13,6 +13,174 @@ This infrastructure supports scalable applications with enterprise-grade feature
 - **Security features** with Secrets Manager, IAM roles, and security groups
 - **Monitoring and alerting** through CloudWatch
 
+### Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph Internet
+        Users[Users/Clients]
+        CDN[CloudFront CDN<br/>Production Only]
+    end
+
+    subgraph "AWS Region: ap-east-2 (Taipei)"
+        subgraph "VPC 10.0.0.0/16"
+            subgraph "Public Subnets"
+                IGW[Internet Gateway]
+                NAT1[NAT Gateway AZ1]
+                NAT2[NAT Gateway AZ2]
+                ALB[Application Load Balancer<br/>HTTP/HTTPS]
+            end
+
+            subgraph "Private Subnets - AZ1"
+                subgraph "EKS Cluster"
+                    EKS1[EKS Node<br/>t3.small/medium SPOT<br/>AL2023]
+                    VPC_CNI1[VPC CNI]
+                    CoreDNS1[CoreDNS]
+                    KubeProxy1[Kube-proxy]
+                end
+            end
+
+            subgraph "Private Subnets - AZ2"
+                subgraph "EKS Cluster "
+                    EKS2[EKS Node<br/>t3.small/medium SPOT<br/>AL2023]
+                    VPC_CNI2[VPC CNI]
+                    CoreDNS2[CoreDNS]
+                    KubeProxy2[Kube-proxy]
+                end
+                RDS[(RDS PostgreSQL 16.9<br/>Multi-AZ Production<br/>gp3 Storage)]
+            end
+        end
+
+        subgraph "S3 Storage"
+            S3_Frontend[Frontend Bucket<br/>Static Assets]
+            S3_Backup[Backup Bucket<br/>DB Backups]
+        end
+
+        subgraph "Container Registry"
+            ECR_Backend[ECR: Backend Images]
+            ECR_Frontend[ECR: Frontend Images]
+        end
+
+        subgraph "Security & Secrets"
+            Secrets[Secrets Manager<br/>- DB Credentials<br/>- JWT Secrets<br/>- App Config]
+            KMS_Secrets[KMS Key: Secrets]
+            KMS_RDS[KMS Key: RDS]
+            KMS_S3[KMS Key: S3]
+        end
+
+        subgraph "Security"
+            WAF[AWS WAF<br/>Rate Limiting<br/>Geo-blocking]
+            SG_ALB[SG: ALB<br/>80, 443]
+            SG_Backend[SG: Backend Pods<br/>8787]
+            SG_RDS[SG: RDS<br/>5432]
+        end
+
+        subgraph "Monitoring"
+            CW_Metrics[CloudWatch Metrics]
+            CW_Alarms[CloudWatch Alarms<br/>- High CPU<br/>- RDS CPU<br/>- ALB Health]
+            CW_Dashboard[CloudWatch Dashboard]
+        end
+
+        subgraph "IAM"
+            IRSA[IAM Roles for Service Accounts]
+            Pod_Role[Backend Pod Role<br/>- Secrets Access<br/>- S3 Backup Access<br/>- CloudWatch Logs]
+        end
+    end
+
+    subgraph "ACM Certificates (us-east-1)"
+        ACM_CF[ACM Certificate<br/>CloudFront<br/>shovel-heros.com]
+    end
+
+    subgraph "ACM Certificates (ap-east-2)"
+        ACM_ALB[ACM Certificate<br/>ALB<br/>shovel-heros.com]
+    end
+
+    %% User Flow - Production
+    Users -->|HTTPS| CDN
+    CDN -->|HTTPS| S3_Frontend
+    CDN -.->|API Calls| ALB
+
+    %% User Flow - Non-Production
+    Users -->|HTTP| S3_Frontend
+    Users -->|HTTP/HTTPS| ALB
+
+    %% Load Balancer Flow
+    IGW --> ALB
+    WAF -.->|Protect| ALB
+    ALB -->|Target Group<br/>Port 8787| EKS1
+    ALB -->|Target Group<br/>Port 8787| EKS2
+
+    %% EKS to RDS
+    EKS1 -.->|PostgreSQL<br/>5432| RDS
+    EKS2 -.->|PostgreSQL<br/>5432| RDS
+
+    %% EKS to Secrets
+    EKS1 -.->|IAM/IRSA| Pod_Role
+    EKS2 -.->|IAM/IRSA| Pod_Role
+    Pod_Role -.->|Read| Secrets
+
+    %% EKS to S3
+    EKS1 -.->|Backups| S3_Backup
+    EKS2 -.->|Backups| S3_Backup
+
+    %% NAT Gateway
+    EKS1 --> NAT1
+    EKS2 --> NAT2
+    NAT1 --> IGW
+    NAT2 --> IGW
+
+    %% ECR
+    EKS1 -.->|Pull Images| ECR_Backend
+    EKS2 -.->|Pull Images| ECR_Backend
+
+    %% Encryption
+    Secrets -.->|Encrypted by| KMS_Secrets
+    RDS -.->|Encrypted by| KMS_RDS
+    S3_Frontend -.->|Encrypted by| KMS_S3
+    S3_Backup -.->|Encrypted by| KMS_S3
+
+    %% Security Groups
+    SG_ALB -.->|Allow| ALB
+    SG_Backend -.->|Allow| EKS1
+    SG_Backend -.->|Allow| EKS2
+    SG_RDS -.->|Allow| RDS
+
+    %% Monitoring
+    EKS1 -.->|Metrics| CW_Metrics
+    EKS2 -.->|Metrics| CW_Metrics
+    RDS -.->|Metrics| CW_Metrics
+    ALB -.->|Metrics| CW_Metrics
+    CW_Metrics --> CW_Alarms
+    CW_Metrics --> CW_Dashboard
+
+    %% Certificates
+    ACM_CF -.->|Used by| CDN
+    ACM_ALB -.->|Used by| ALB
+
+    style Users fill:#e1f5ff
+    style CDN fill:#ff9900
+    style ALB fill:#ff9900
+    style EKS1 fill:#ff9900
+    style EKS2 fill:#ff9900
+    style RDS fill:#3b48cc
+    style S3_Frontend fill:#569a31
+    style S3_Backup fill:#569a31
+    style Secrets fill:#dd344c
+    style WAF fill:#dd344c
+    style KMS_Secrets fill:#dd344c
+    style KMS_RDS fill:#dd344c
+    style KMS_S3 fill:#dd344c
+```
+
+### Key Features
+
+- **High Availability**: Multi-AZ deployment across 2 availability zones (3 in production)
+- **Cost Optimized**: SPOT instances for non-production, right-sized resources
+- **Secure**: KMS encryption at rest, Secrets Manager, WAF protection, private subnets
+- **Scalable**: Auto-scaling EKS node groups (1-3 nodes)
+- **Production CDN**: CloudFront distribution with OAC for production environments
+- **Monitoring**: CloudWatch metrics, alarms, and dashboards
+
 ## Project Structure
 
 ```
