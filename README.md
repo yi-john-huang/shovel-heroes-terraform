@@ -1,6 +1,6 @@
-# Terraform Infrastructure Skeleton
+# Infrastructure for Shovel Heros
 
-A comprehensive Terraform configuration for deploying cloud-native applications on AWS with multi-region support, focusing on Taiwan region (ap-northeast-2).
+A comprehensive Terraform configuration for deploying cloud-native applications on AWS with multi-region support, focusing on Taiwan region (ap-east-2).
 
 ## Architecture Overview
 
