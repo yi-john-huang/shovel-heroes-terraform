@@ -28,13 +28,15 @@ resource "aws_db_parameter_group" "default" {
 
   # Connection pooling optimizations for Node.js/pg
   parameter {
-    name  = "max_connections"
-    value = local.is_production ? "200" : "100"
+    name         = "max_connections"
+    value        = local.is_production ? "200" : "100"
+    apply_method = "pending-reboot" # Static parameter requires reboot
   }
 
   parameter {
-    name  = "shared_buffers"
-    value = local.is_production ? "{DBInstanceClassMemory/10240}" : "{DBInstanceClassMemory/16384}"
+    name         = "shared_buffers"
+    value        = local.is_production ? "{DBInstanceClassMemory/10240}" : "{DBInstanceClassMemory/16384}"
+    apply_method = "pending-reboot" # Static parameter requires reboot
   }
 
   # Performance optimizations
@@ -60,6 +62,7 @@ resource "aws_db_instance" "default" {
   max_allocated_storage = local.rds_max_allocated_storage
   storage_type          = "gp3" # gp3 is more cost-effective than gp2
   storage_encrypted     = true
+  kms_key_id            = aws_kms_key.rds[0].arn
   iops                  = local.is_production ? 3000 : null # For gp3, optional IOPS
 
   engine         = local.db_engine
@@ -74,6 +77,7 @@ resource "aws_db_instance" "default" {
   vpc_security_group_ids = [aws_security_group.rds_sg[0].id]
   db_subnet_group_name   = aws_db_subnet_group.default[0].name
   parameter_group_name   = aws_db_parameter_group.default[0].name
+  publicly_accessible    = false
 
   backup_retention_period = local.backup_retention_days
   backup_window           = "03:00-04:00"
@@ -82,14 +86,14 @@ resource "aws_db_instance" "default" {
   skip_final_snapshot       = !local.is_production
   final_snapshot_identifier = local.is_production ? "${var.project_name}-${local.env_type}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
-  # Performance Insights
-  enabled_cloudwatch_logs_exports       = ["postgresql", "upgrade"]
-  performance_insights_enabled          = local.is_production
-  performance_insights_retention_period = local.is_production ? 7 : null
+  # Performance Insights (disable for cost savings)
+  enabled_cloudwatch_logs_exports       = local.is_production ? ["postgresql", "upgrade"] : []
+  performance_insights_enabled          = false # Disabled for cost savings
+  performance_insights_retention_period = null
 
-  # Enhanced Monitoring
-  monitoring_interval = local.is_production ? 60 : 0 # 0 disables enhanced monitoring
-  monitoring_role_arn = local.is_production ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
+  # Enhanced Monitoring (disable for cost savings)
+  monitoring_interval = 0 # Disabled for cost savings
+  monitoring_role_arn = null
 
   # Multi-AZ for production
   multi_az = local.is_production

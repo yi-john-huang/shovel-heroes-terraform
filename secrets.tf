@@ -8,6 +8,7 @@ resource "aws_secretsmanager_secret" "database" {
   name_prefix             = "${var.project_name}-${local.env_type}-db-"
   description             = "Database credentials for ${local.app_name}"
   recovery_window_in_days = local.is_production ? 30 : 7
+  kms_key_id              = aws_kms_key.secrets.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${local.env_type}-database-secret"
@@ -36,6 +37,7 @@ resource "aws_secretsmanager_secret" "jwt" {
   name_prefix             = "${var.project_name}-${local.env_type}-jwt-"
   description             = "JWT secret for ${local.app_name} authentication"
   recovery_window_in_days = local.is_production ? 30 : 7
+  kms_key_id              = aws_kms_key.secrets.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${local.env_type}-jwt-secret"
@@ -60,6 +62,7 @@ resource "aws_secretsmanager_secret" "application" {
   name_prefix             = "${var.project_name}-${local.env_type}-app-"
   description             = "Application secrets for ${local.app_name}"
   recovery_window_in_days = local.is_production ? 30 : 7
+  kms_key_id              = aws_kms_key.secrets.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${local.env_type}-app-secret"
@@ -101,10 +104,10 @@ resource "aws_iam_policy" "secrets_read" {
         Action = [
           "kms:Decrypt"
         ]
-        Resource = "*"
+        Resource = [aws_kms_key.secrets.arn]
         Condition = {
           StringEquals = {
-            "kms:ViaService" = "secretsmanager.${data.aws_region.current.name}.amazonaws.com"
+            "kms:ViaService" = "secretsmanager.${data.aws_region.current.id}.amazonaws.com"
           }
         }
       }
