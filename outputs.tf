@@ -171,6 +171,27 @@ output "alb_security_group_id" {
   value       = local.alb_enabled ? aws_security_group.alb[0].id : null
 }
 
+## Route53 DNS
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID"
+  value       = var.domain_name != "" ? aws_route53_zone.main[0].zone_id : null
+}
+
+output "route53_name_servers" {
+  description = "Route53 name servers (configure these in your domain registrar)"
+  value       = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
+}
+
+output "domain_name" {
+  description = "Configured domain name"
+  value       = var.domain_name != "" ? var.domain_name : null
+}
+
+output "api_domain" {
+  description = "API domain name"
+  value       = var.domain_name != "" && local.alb_enabled ? "api.${var.domain_name}" : null
+}
+
 ## Deployment Information
 output "deployment_summary" {
   description = "Summary of deployed resources for Shovel Heroes"
@@ -184,5 +205,6 @@ output "deployment_summary" {
     s3_enabled   = local.s3_enabled
     application  = local.app_name
     backend_port = local.backend_port
+    domain_name  = var.domain_name
   }
 }
