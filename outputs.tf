@@ -69,6 +69,11 @@ output "backend_target_group_arn" {
   value       = local.alb_enabled ? aws_lb_target_group.backend[0].arn : null
 }
 
+output "frontend_target_group_arn" {
+  description = "Frontend target group ARN for Kubernetes service"
+  value       = local.alb_enabled ? aws_lb_target_group.frontend[0].arn : null
+}
+
 ## Database
 output "rds_address" {
   description = "RDS instance address (without port)"

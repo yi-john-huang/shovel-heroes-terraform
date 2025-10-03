@@ -58,6 +58,39 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
+# Target group for frontend pods (Nginx)
+resource "aws_lb_target_group" "frontend" {
+  count = local.alb_enabled ? 1 : 0
+
+  name_prefix = "fe-"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.vpc.id
+  target_type = "ip" # For EKS pods
+
+  health_check {
+    enabled             = true
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "traffic-port"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-299"
+  }
+
+  deregistration_delay = 30
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${local.env_type}-frontend-tg"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # HTTP listener (redirect to HTTPS in production)
 resource "aws_lb_listener" "http" {
   count = local.alb_enabled ? 1 : 0
@@ -148,6 +181,48 @@ resource "aws_lb_listener_rule" "api" {
         "/docs",
         "/docs/*"
       ]
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Listener rule for frontend (catch-all, lowest priority)
+resource "aws_lb_listener_rule" "frontend" {
+  count = local.alb_enabled ? 1 : 0
+
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 200 # Lower priority = evaluated last (catch-all)
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# HTTPS frontend rule (if domain configured)
+resource "aws_lb_listener_rule" "frontend_https" {
+  count = local.alb_enabled && var.domain_name != "" ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 200 # Lower priority = evaluated last (catch-all)
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
     }
   }
 
