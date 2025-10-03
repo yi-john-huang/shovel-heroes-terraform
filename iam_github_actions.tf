@@ -95,3 +95,28 @@ resource "aws_iam_role_policy" "github_actions_secrets" {
     }]
   })
 }
+
+# KMS decrypt policy for decrypting Secrets Manager secrets
+resource "aws_iam_role_policy" "github_actions_kms" {
+  name = "kms-decrypt"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "kms:ViaService" = [
+            "secretsmanager.${data.aws_region.current.id}.amazonaws.com"
+          ]
+        }
+      }
+    }]
+  })
+}
