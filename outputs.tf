@@ -117,6 +117,11 @@ output "backend_pod_role_arn" {
   value       = local.eks_enabled ? aws_iam_role.backend_pods[0].arn : null
 }
 
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions OIDC authentication"
+  value       = aws_iam_role.github_actions.arn
+}
+
 ## S3 Buckets
 output "frontend_bucket_name" {
   description = "S3 bucket name for frontend static assets"
