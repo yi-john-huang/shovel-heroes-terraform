@@ -52,7 +52,6 @@ graph TB
         end
 
         subgraph "S3 Storage"
-            S3_Frontend[Frontend Bucket<br/>Static Assets]
             S3_Backup[Backup Bucket<br/>DB Backups]
         end
 
@@ -82,33 +81,46 @@ graph TB
         end
 
         subgraph "IAM"
-            IRSA[IAM Roles for Service Accounts]
+            IRSA[IAM Roles for Service Accounts<br/>OIDC Provider]
             Pod_Role[Backend Pod Role<br/>- Secrets Access<br/>- S3 Backup Access<br/>- CloudWatch Logs]
+            ALB_Role[ALB Controller Role<br/>- ELB Permissions<br/>- EC2 Permissions<br/>- Target Group Mgmt]
+        end
+
+        subgraph "Load Balancer Controller"
+            ALB_Controller[AWS Load Balancer Controller<br/>Helm Chart<br/>v2.13.4]
+            TGB_Backend[TargetGroupBinding<br/>Backend → TG]
+            TGB_Frontend[TargetGroupBinding<br/>Frontend → TG]
         end
     end
 
-    subgraph "ACM Certificates (us-east-1)"
-        ACM_CF[ACM Certificate<br/>CloudFront<br/>shovel-heros.com]
+    subgraph "Route53"
+        R53[Route53 Hosted Zone<br/>shovel-heroes.cc]
+        R53_ROOT[shovel-heroes.cc → ALB]
+        R53_API[api.shovel-heroes.cc → ALB]
     end
 
     subgraph "ACM Certificates (ap-east-2)"
-        ACM_ALB[ACM Certificate<br/>ALB<br/>shovel-heros.com]
+        ACM_ALB[ACM Certificate<br/>ALB<br/>shovel-heroes.cc<br/>*.shovel-heroes.cc]
     end
 
-    %% User Flow - Production
-    Users -->|HTTPS| CDN
-    CDN -->|HTTPS| S3_Frontend
-    CDN -.->|API Calls| ALB
-
-    %% User Flow - Non-Production
-    Users -->|HTTP| S3_Frontend
-    Users -->|HTTP/HTTPS| ALB
+    %% User Flow
+    Users -->|HTTP/HTTPS| R53
+    R53_ROOT -->|Frontend| ALB
+    R53_API -->|API| ALB
 
     %% Load Balancer Flow
     IGW --> ALB
     WAF -.->|Protect| ALB
-    ALB -->|Target Group<br/>Port 8787| EKS1
-    ALB -->|Target Group<br/>Port 8787| EKS2
+    ALB -->|api.shovel-heroes.cc → Backend TG<br/>Port 8787| TGB_Backend
+    ALB -->|shovel-heroes.cc/api/* → Backend TG<br/>Port 8787| TGB_Backend
+    ALB -->|shovel-heroes.cc/* → Frontend TG<br/>Port 8080| TGB_Frontend
+    TGB_Backend -->|Register Pods| EKS1
+    TGB_Backend -->|Register Pods| EKS2
+    TGB_Frontend -->|Register Pods| EKS1
+    TGB_Frontend -->|Register Pods| EKS2
+    ALB_Controller -.->|Manage| TGB_Backend
+    ALB_Controller -.->|Manage| TGB_Frontend
+    ALB_Role -.->|Permissions| ALB_Controller
 
     %% EKS to RDS
     EKS1 -.->|PostgreSQL<br/>5432| RDS

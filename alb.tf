@@ -135,7 +135,28 @@ resource "aws_lb_listener" "https" {
   tags = local.common_tags
 }
 
-# Listener rule for API paths on HTTPS
+# Listener rule for api subdomain (host-based routing) on HTTPS
+resource "aws_lb_listener_rule" "api_subdomain_https" {
+  count = local.alb_enabled && var.domain_name != "" ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.${var.domain_name}"]
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Listener rule for API paths on HTTPS (for root domain)
 resource "aws_lb_listener_rule" "api_https" {
   count = local.alb_enabled && var.domain_name != "" ? 1 : 0
 
@@ -145,6 +166,12 @@ resource "aws_lb_listener_rule" "api_https" {
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    host_header {
+      values = [var.domain_name]
+    }
   }
 
   condition {
@@ -192,7 +219,7 @@ resource "aws_lb_listener_rule" "frontend" {
   count = local.alb_enabled ? 1 : 0
 
   listener_arn = aws_lb_listener.http[0].arn
-  priority     = 200 # Lower priority = evaluated last (catch-all)
+  priority     = 300 # Lower priority = evaluated last (catch-all)
 
   action {
     type             = "forward"
@@ -208,16 +235,22 @@ resource "aws_lb_listener_rule" "frontend" {
   tags = local.common_tags
 }
 
-# HTTPS frontend rule (if domain configured)
+# HTTPS frontend rule (if domain configured) - only for root domain
 resource "aws_lb_listener_rule" "frontend_https" {
   count = local.alb_enabled && var.domain_name != "" ? 1 : 0
 
   listener_arn = aws_lb_listener.https[0].arn
-  priority     = 200 # Lower priority = evaluated last (catch-all)
+  priority     = 200 # Lower priority = evaluated last (catch-all for root domain)
 
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+
+  condition {
+    host_header {
+      values = [var.domain_name]
+    }
   }
 
   condition {

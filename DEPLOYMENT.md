@@ -118,7 +118,37 @@ terraform output -raw kubectl_config_command | bash
 kubectl get nodes
 ```
 
-### 2. Build and Push Docker Images
+### 2. Install AWS Load Balancer Controller
+
+The AWS Load Balancer Controller is required to connect Kubernetes services to the ALB target groups created by Terraform.
+
+```bash
+# Add the EKS Helm repository
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+
+# Install the AWS Load Balancer Controller
+# The IAM role and service account are already created by Terraform
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=$(terraform output -raw eks_cluster_name) \
+  --set region=$(terraform output -raw primary_region) \
+  --set vpcId=$(terraform output -raw vpc_id) \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller
+
+# Verify the controller is running
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+```
+
+**Note**: The Terraform configuration has already created:
+- IAM policy with ALB controller permissions
+- IAM role with IRSA (OIDC trust relationship)
+- Kubernetes service account with role annotation
+
+See `iam_alb_controller.tf` for the IRSA setup details.
+
+### 3. Build and Push Docker Images
 
 #### Backend API
 
@@ -139,7 +169,7 @@ docker push $ECR_BACKEND:latest
 docker push $ECR_BACKEND:v1.0.0
 ```
 
-#### Frontend (Optional - if using container instead of S3)
+#### Frontend (Container deployment)
 
 ```bash
 cd /path/to/shovel-heroes
@@ -147,17 +177,22 @@ cd /path/to/shovel-heroes
 # Build the React app
 npm run build
 
-# The dist/ folder contains static files for S3 deployment
-# Or build a Docker image if serving from container
+# Build and push frontend image
+docker build -t shovel-heroes-frontend:latest .
+ECR_FRONTEND=$(terraform output -json ecr_repository_urls | jq -r '.["shovel-heroes-frontend"]')
+docker tag shovel-heroes-frontend:latest $ECR_FRONTEND:latest
+docker push $ECR_FRONTEND:latest
 ```
 
-### 3. Create Kubernetes Namespace
+### 4. Create Kubernetes Namespace
 
 ```bash
 kubectl create namespace shovel-heroes
 ```
 
-### 4. Deploy Kubernetes Resources
+### 5. Deploy Kubernetes Resources
+
+The ALB and target groups are already created by Terraform. Use TargetGroupBinding CRDs to connect Kubernetes services to the existing ALB target groups.
 
 Create `k8s/backend-deployment.yaml`:
 
@@ -174,7 +209,7 @@ metadata:
   name: shovel-heroes-backend
   namespace: shovel-heroes
   annotations:
-    eks.amazonaws.com/role-arn: <BACKEND_POD_ROLE_ARN>  # From Terraform output
+    eks.amazonaws.com/role-arn: <BACKEND_POD_ROLE_ARN>  # From: terraform output -raw backend_pod_role_arn
 
 ---
 apiVersion: apps/v1
@@ -209,18 +244,6 @@ spec:
             secretKeyRef:
               name: database-credentials
               key: database_url
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8787
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 8787
-          initialDelaySeconds: 10
-          periodSeconds: 5
         resources:
           requests:
             memory: "512Mi"
@@ -235,11 +258,8 @@ kind: Service
 metadata:
   name: backend
   namespace: shovel-heroes
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "alb"
-    alb.ingress.kubernetes.io/target-type: "ip"
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: backend
   ports:
@@ -248,37 +268,103 @@ spec:
     protocol: TCP
 
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
 metadata:
-  name: backend-ingress
+  name: backend-tgb
   namespace: shovel-heroes
-  annotations:
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/healthcheck-path: /healthz
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    alb.ingress.kubernetes.io/subnets: <PUBLIC_SUBNET_IDS>  # From Terraform output
-    alb.ingress.kubernetes.io/security-groups: <ALB_SECURITY_GROUP_ID>  # From Terraform output
 spec:
-  ingressClassName: alb
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8787
+  serviceRef:
+    name: backend
+    port: 8787
+  targetGroupARN: <BACKEND_TG_ARN>  # From: terraform output -raw backend_target_group_arn
+  targetType: ip
 ```
 
-Apply the configuration:
+Create `k8s/frontend-deployment.yaml`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: shovel-heroes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: <ECR_FRONTEND_URL>:latest  # From Terraform output
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: shovel-heroes
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+
+---
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: frontend-tgb
+  namespace: shovel-heroes
+spec:
+  serviceRef:
+    name: frontend
+    port: 80
+  targetGroupARN: <FRONTEND_TG_ARN>  # From: terraform output -raw frontend_target_group_arn
+  targetType: ip
+```
+
+Apply the configurations:
 
 ```bash
+# Deploy backend
 kubectl apply -f k8s/backend-deployment.yaml
+
+# Deploy frontend
+kubectl apply -f k8s/frontend-deployment.yaml
+
+# Verify TargetGroupBindings
+kubectl get targetgroupbindings -n shovel-heroes
+
+# Check if pods are registered with ALB target groups
+aws elbv2 describe-target-health \
+  --target-group-arn $(terraform output -raw backend_target_group_arn) \
+  --region ap-east-2
 ```
+
+**Important**: The Terraform-created ALB has listener rules configured for:
+- Priority 50 (HTTPS): `api.shovel-heroes.cc` (all paths) → Backend target group
+- Priority 100 (HTTPS): `shovel-heroes.cc` + `/api/*`, `/healthz`, `/docs/*` → Backend target group
+- Priority 200 (HTTPS): `shovel-heroes.cc` + `/*` → Frontend target group
+- HTTP listener: Redirects to HTTPS (301)
 
 ### 5. Create Kubernetes Secrets from AWS Secrets Manager
 
@@ -346,37 +432,26 @@ cd packages/backend
 
 ---
 
-## Frontend Deployment
+## Database Tunnel Access
 
-### Option 1: Deploy to S3 (Recommended)
-
-```bash
-cd /path/to/shovel-heroes
-
-# Build the frontend
-npm run build
-
-# Sync to S3
-FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
-aws s3 sync dist/ s3://$FRONTEND_BUCKET/ --delete
-
-# Set correct content types
-aws s3 cp s3://$FRONTEND_BUCKET/ s3://$FRONTEND_BUCKET/ \
-  --exclude "*" --include "*.html" \
-  --content-type "text/html" \
-  --metadata-directive REPLACE \
-  --recursive
-```
-
-### Option 2: CloudFront (Production)
-
-If CloudFront is enabled:
+For secure database access, use the SSM-based bastion host created by Terraform:
 
 ```bash
-# After S3 sync, invalidate CloudFront cache
-DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
-aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+# Run the automated tunnel script
+cd /path/to/shovel-heroes-terraform
+./scripts/db-tunnel.sh
+
+# This will:
+# - Get bastion instance ID and RDS endpoint from Terraform outputs
+# - Retrieve database password from Secrets Manager
+# - Copy password to clipboard (macOS)
+# - Start SSM port forwarding session (localhost:5433 → RDS:5432)
+
+# Then connect with pgAdmin or psql:
+psql -h localhost -p 5433 -U dbadmin -d shovelheroes
 ```
+
+See `scripts/README.md` for more details on the database tunnel.
 
 ---
 
@@ -384,30 +459,55 @@ aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/
 
 ### Backend API
 
+The backend API is accessible via the ALB with **host-based routing**:
+
 ```bash
-# Get the ALB DNS name
-ALB_DNS=$(terraform output -raw alb_dns_name)
+# Get the API domain (Route53 configured)
+API_DOMAIN=$(terraform output -raw api_domain)
 
-# Test health endpoint
-curl http://$ALB_DNS/healthz
+# Test backend health
+curl https://$API_DOMAIN/healthz
+# Response: {"status":"ok","db":"ready"}
 
-# Should return: {"status":"ok","db":"ready"}
+# Test API endpoints
+curl https://$API_DOMAIN/api/disasters
 ```
 
 ### Frontend
 
-```bash
-# Get frontend URL
-FRONTEND_URL=$(terraform output -raw frontend_url)
+The frontend is served via the same ALB on the root domain:
 
-echo "Frontend available at: $FRONTEND_URL"
+```bash
+# Get the domain name
+DOMAIN=$(terraform output -raw domain_name)
+
+# Access frontend
+echo "Frontend: https://$DOMAIN"
+echo "Backend API: https://api.$DOMAIN"
 ```
+
+**Current Setup** (Fully Deployed):
+- ✅ Domain: `shovel-heroes.cc` (registered via Route53)
+- ✅ Frontend: `https://shovel-heroes.cc` → ALB → Frontend pods (nginx on port 8080)
+- ✅ Backend API: `https://api.shovel-heroes.cc` → ALB → Backend pods (port 8787)
+- ✅ ACM Certificate: Valid for `*.shovel-heroes.cc` and `shovel-heroes.cc`
+- ✅ HTTPS: Enforced with HTTP→HTTPS redirect
+- ✅ Security: ClusterIP services with TargetGroupBinding (targetType: ip)
+
+**Routing Configuration**:
+- **Host-based routing** (priority 50): `api.shovel-heroes.cc` → Backend target group
+- **Path-based routing** (priority 100): `shovel-heroes.cc/api/*`, `/healthz`, `/docs/*` → Backend target group
+- **Catch-all routing** (priority 200): `shovel-heroes.cc/*` → Frontend target group
 
 ### API Documentation
 
-Access Swagger UI:
-```
-http://<ALB_DNS>/docs
+Access Swagger UI (if implemented):
+```bash
+# API documentation
+curl https://api.shovel-heroes.cc/docs
+
+# Health check
+curl https://api.shovel-heroes.cc/healthz
 ```
 
 ---
