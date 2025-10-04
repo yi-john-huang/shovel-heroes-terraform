@@ -37,7 +37,10 @@ variable "env_vars" {
 variable "secrets" {
   description = "Sensitive values"
   type = object({
-    database_password = string
+    database_password      = string
+    line_channel_id        = optional(string, "")
+    line_channel_secret    = optional(string, "")
+    turnstile_secret_key   = optional(string, "")
   })
   sensitive = true
   default = {

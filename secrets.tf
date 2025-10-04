@@ -72,10 +72,11 @@ resource "aws_secretsmanager_secret" "application" {
 resource "aws_secretsmanager_secret_version" "application" {
   secret_id = aws_secretsmanager_secret.application.id
   secret_string = jsonencode({
-    node_env = local.env_type == "prod" ? "production" : "development"
-    port     = local.backend_port
-    # Add other application-specific secrets here
-    # Example: api_key = var.third_party_api_key
+    node_env              = local.env_type == "prod" ? "production" : "development"
+    port                  = local.backend_port
+    line_channel_id       = var.secrets.line_channel_id
+    line_channel_secret   = var.secrets.line_channel_secret
+    turnstile_secret_key  = var.secrets.turnstile_secret_key
   })
 }
 

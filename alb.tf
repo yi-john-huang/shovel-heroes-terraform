@@ -188,6 +188,33 @@ resource "aws_lb_listener_rule" "api_https" {
   tags = local.common_tags
 }
 
+# Listener rule for AUTH paths on HTTPS (for root domain)
+resource "aws_lb_listener_rule" "auth_https" {
+  count = local.alb_enabled && var.domain_name != "" ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    host_header {
+      values = [var.domain_name]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/auth/*"]
+    }
+  }
+
+  tags = local.common_tags
+}
+
 # Listener rule for API paths
 resource "aws_lb_listener_rule" "api" {
   count = local.alb_enabled ? 1 : 0
@@ -208,6 +235,27 @@ resource "aws_lb_listener_rule" "api" {
         "/docs",
         "/docs/*"
       ]
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Listener rule for AUTH paths (HTTP - will redirect to HTTPS)
+resource "aws_lb_listener_rule" "auth_http" {
+  count = local.alb_enabled ? 1 : 0
+
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/auth/*"]
     }
   }
 
