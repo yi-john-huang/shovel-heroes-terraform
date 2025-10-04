@@ -56,3 +56,15 @@ variable "domain_name" {
   }
 }
 
+
+variable "ssh_key_name" {
+  description = "SSH key pair name for bastion host access"
+  type        = string
+  default     = "" # Leave empty to skip bastion creation
+}
+
+variable "admin_ip" {
+  description = "Admin IP address for bastion SSH access (CIDR format)"
+  type        = string
+  default     = "0.0.0.0/0" # Restrict this to your IP in production
+}

@@ -98,4 +98,5 @@ venv/
 # Local configuration overrides
 local.tf
 *_local.tf
-.env.local
+.env.localtfplan
+*.log

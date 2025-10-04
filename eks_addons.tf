@@ -7,7 +7,7 @@ resource "aws_eks_addon" "vpc_cni" {
   cluster_name = module.eks[0].cluster_name
   addon_name   = "vpc-cni"
 
-  addon_version            = data.aws_eks_addon_version.vpc_cni[0].version
+  addon_version               = data.aws_eks_addon_version.vpc_cni[0].version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -21,7 +21,7 @@ resource "aws_eks_addon" "coredns" {
   cluster_name = module.eks[0].cluster_name
   addon_name   = "coredns"
 
-  addon_version            = data.aws_eks_addon_version.coredns[0].version
+  addon_version               = data.aws_eks_addon_version.coredns[0].version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
@@ -39,7 +39,7 @@ resource "aws_eks_addon" "kube_proxy" {
   cluster_name = module.eks[0].cluster_name
   addon_name   = "kube-proxy"
 
-  addon_version            = data.aws_eks_addon_version.kube_proxy[0].version
+  addon_version               = data.aws_eks_addon_version.kube_proxy[0].version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 

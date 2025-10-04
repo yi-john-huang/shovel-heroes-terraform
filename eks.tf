@@ -30,7 +30,7 @@ module "eks" {
       max_size     = 3
       desired_size = local.is_production ? 2 : 1
 
-      disk_size              = 20
+      disk_size                  = 20
       enable_bootstrap_user_data = true
 
       block_device_mappings = {
