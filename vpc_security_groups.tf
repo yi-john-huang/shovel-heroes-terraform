@@ -211,3 +211,28 @@ resource "aws_security_group_rule" "backend_pods_from_vpc" {
   security_group_id = aws_security_group.backend_pods[0].id
   description       = "Backend API port and health checks from VPC"
 }
+
+# Security group rules for EKS nodes to allow ALB traffic
+resource "aws_security_group_rule" "eks_nodes_from_alb_backend" {
+  count = local.eks_enabled && local.alb_enabled ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = local.backend_port
+  to_port                  = local.backend_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb[0].id
+  security_group_id        = module.eks[0].node_security_group_id
+  description              = "Backend API port from ALB (for pod IPs)"
+}
+
+resource "aws_security_group_rule" "eks_nodes_from_alb_frontend" {
+  count = local.eks_enabled && local.alb_enabled ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb[0].id
+  security_group_id        = module.eks[0].node_security_group_id
+  description              = "Frontend port from ALB (for pod IPs)"
+}
