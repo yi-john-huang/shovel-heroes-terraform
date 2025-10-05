@@ -188,7 +188,8 @@ resource "aws_lb_listener_rule" "api_https" {
   tags = local.common_tags
 }
 
-# Listener rule for AUTH paths on HTTPS (for root domain)
+# Listener rule for backend AUTH endpoints on HTTPS (for root domain)
+# Only route backend auth endpoints, not frontend routes like /auth/line/return
 resource "aws_lb_listener_rule" "auth_https" {
   count = local.alb_enabled && var.domain_name != "" ? 1 : 0
 
@@ -208,7 +209,12 @@ resource "aws_lb_listener_rule" "auth_https" {
 
   condition {
     path_pattern {
-      values = ["/auth/*"]
+      values = [
+        "/auth/line/login",
+        "/auth/line/callback",
+        "/auth/line/exchange",
+        "/auth/logout"
+      ]
     }
   }
 
@@ -241,7 +247,8 @@ resource "aws_lb_listener_rule" "api" {
   tags = local.common_tags
 }
 
-# Listener rule for AUTH paths (HTTP - will redirect to HTTPS)
+# Listener rule for backend AUTH endpoints (HTTP - will redirect to HTTPS)
+# Only route backend auth endpoints, not frontend routes like /auth/line/return
 resource "aws_lb_listener_rule" "auth_http" {
   count = local.alb_enabled ? 1 : 0
 
@@ -255,7 +262,12 @@ resource "aws_lb_listener_rule" "auth_http" {
 
   condition {
     path_pattern {
-      values = ["/auth/*"]
+      values = [
+        "/auth/line/login",
+        "/auth/line/callback",
+        "/auth/line/exchange",
+        "/auth/logout"
+      ]
     }
   }
 
