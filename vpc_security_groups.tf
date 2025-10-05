@@ -80,35 +80,11 @@ resource "aws_security_group" "rds_sg" {
   vpc_id      = aws_vpc.vpc.id
 
   ingress {
-    description     = "MySQL/Aurora"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.internal_sg.id]
-  }
-
-  ingress {
-    description     = "PostgreSQL from internal"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.internal_sg.id]
-  }
-
-  ingress {
-    description     = "PostgreSQL from backend pods"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = local.eks_enabled ? [aws_security_group.backend_pods[0].id] : []
-  }
-
-  ingress {
-    description     = "PostgreSQL from EKS node security group"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = local.eks_enabled ? [module.eks[0].node_security_group_id] : []
+    description = "PostgreSQL from VPC"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [local.vpc_cidr]
   }
 
   egress {
