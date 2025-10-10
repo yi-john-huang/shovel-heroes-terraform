@@ -34,8 +34,11 @@ resource "aws_iam_role" "github_actions" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          # Restrict to specific repository
-          "token.actions.githubusercontent.com:sub" = "repo:yi-john-huang/shovel-heroes-k8s:*"
+          # Allow both fork and upstream repository
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:yi-john-huang/shovel-heroes-k8s:*",
+            "repo:shovel-heroes-org/shovel-heroes:*"
+          ]
         }
       }
     }]
